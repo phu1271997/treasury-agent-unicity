@@ -8,7 +8,10 @@
     "build": "tsc",
     "start": "node --loader ts-node/esm src/index.ts",
     "dev": "node --loader ts-node/esm --watch src/index.ts",
-    "agent": "node --loader ts-node/esm src/index.ts"
+    "agent": "node --loader ts-node/esm src/index.ts",
+    "dashboard": "npm run dev --prefix dashboard",
+    "dashboard:build": "npm run build --prefix dashboard",
+    "dashboard:preview": "npm run preview --prefix dashboard"
   },
   "keywords": [
     "unicity",
