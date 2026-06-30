@@ -68,6 +68,19 @@ export default function App() {
     return currentPayouts.filter((p) => p.timestamp >= cutoff).reduce((acc, p) => acc + p.amount, 0n);
   };
 
+  const updateOrAppendHistory = (id: string, amount: string, memo: string, status: 'pending' | 'approved' | 'rejected') => {
+    setPaymentHistory((prev) => {
+      const exists = prev.some((x) => x.id === id);
+      if (exists) {
+        return prev.map((x) => x.id === id ? { ...x, status } : x);
+      }
+      return [
+        ...prev,
+        { id, amount, memo, status, timestamp: new Date().toLocaleTimeString() }
+      ];
+    });
+  };
+
   // ── 5. Initialize Wallets ──────────────────────────────────────────────────
   const startAgent = async () => {
     if (agentStatus !== 'offline') return;
@@ -297,10 +310,7 @@ export default function App() {
         addLog(`↳ ⛔ REJECTED: Request of ${toHumanReadable(amount)} ${currentCoin} exceeds single tx ceiling of ${currentMaxAuto} ${currentCoin}.`, 'warn');
         await agentSphere.payments.rejectPaymentRequest(requestId);
         
-        setPaymentHistory((prev) => [
-          ...prev,
-          { id: requestId, amount: toHumanReadable(amount), memo, status: 'rejected', timestamp: new Date().toLocaleTimeString() }
-        ]);
+        updateOrAppendHistory(requestId, toHumanReadable(amount), memo, 'rejected');
         return;
       }
 
@@ -310,10 +320,7 @@ export default function App() {
         addLog(`↳ ⛔ REJECTED: Request would exceed rolling 24h payout cap of ${currentDailyCap} ${currentCoin}.`, 'warn');
         await agentSphere.payments.rejectPaymentRequest(requestId);
         
-        setPaymentHistory((prev) => [
-          ...prev,
-          { id: requestId, amount: toHumanReadable(amount), memo, status: 'rejected', timestamp: new Date().toLocaleTimeString() }
-        ]);
+        updateOrAppendHistory(requestId, toHumanReadable(amount), memo, 'rejected');
         return;
       }
 
@@ -336,10 +343,7 @@ export default function App() {
         addLog('↳ ⛔ REJECTED: Balance still insufficient after top-up attempts.', 'error');
         await agentSphere.payments.rejectPaymentRequest(requestId);
         
-        setPaymentHistory((prev) => [
-          ...prev,
-          { id: requestId, amount: toHumanReadable(amount), memo, status: 'rejected', timestamp: new Date().toLocaleTimeString() }
-        ]);
+        updateOrAppendHistory(requestId, toHumanReadable(amount), memo, 'rejected');
         return;
       }
 
@@ -350,10 +354,7 @@ export default function App() {
         addLog(`↳ Paid successfully! Transfer ID: ${res.id?.substring(0, 16)}...`, 'success');
         
         setPayouts((prev) => [...prev, { amount, timestamp: Date.now() }]);
-        setPaymentHistory((prev) => [
-          ...prev,
-          { id: requestId, amount: toHumanReadable(amount), memo, status: 'approved', timestamp: new Date().toLocaleTimeString() }
-        ]);
+        updateOrAppendHistory(requestId, toHumanReadable(amount), memo, 'approved');
 
         // Refresh agent & tester balances
         setTimeout(async () => {
@@ -399,10 +400,7 @@ export default function App() {
 
       const reqId = request.requestId || request.eventId || 'unknown';
       addLog(`[Bob] ✅ Payment request created! Request ID: ${reqId.substring(0, 16)}...`, 'success');
-      setPaymentHistory((prev) => [
-        ...prev,
-        { id: reqId, amount: reqAmount, memo: reqMemo, status: 'pending', timestamp: new Date().toLocaleTimeString() }
-      ]);
+      updateOrAppendHistory(reqId, reqAmount, reqMemo, 'pending');
     } catch (err: any) {
       console.error(err);
       addLog(`[Bob] ❌ Failed to create request: ${err.message || err}`, 'error');
