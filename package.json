@@ -1,0 +1,33 @@
+{
+  "name": "treasury-manager-agent",
+  "version": "0.1.0",
+  "description": "An autonomous treasury management agent built on the Unicity Sphere SDK for Testnet v2. Monitors balances, auto-tops-up via self-mint, responds to payment requests within policy limits, and settles autonomously with no human in the loop.",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node --loader ts-node/esm src/index.ts",
+    "dev": "node --loader ts-node/esm --watch src/index.ts",
+    "agent": "node --loader ts-node/esm src/index.ts"
+  },
+  "keywords": [
+    "unicity",
+    "sphere",
+    "autonomous-agent",
+    "treasury",
+    "testnet-v2",
+    "ai-agents"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@unicitylabs/sphere-sdk": "^0.10.7",
+    "ws": "^8.18.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}

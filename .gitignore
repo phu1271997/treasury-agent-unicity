@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+wallet-data/
+tokens/
+*.log
+.DS_Store
+/dashboard/node_modules/
+/dashboard/dist/
+.vercel
+
