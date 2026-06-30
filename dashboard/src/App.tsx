@@ -63,9 +63,9 @@ export default function App() {
   }, [logs]);
 
   // Calculate total payouts in last 24h
-  const getPayoutsLast24h = () => {
+  const getPayoutsLast24h = (currentPayouts: { amount: bigint; timestamp: number }[]) => {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    return payouts.filter((p) => p.timestamp >= cutoff).reduce((acc, p) => acc + p.amount, 0n);
+    return currentPayouts.filter((p) => p.timestamp >= cutoff).reduce((acc, p) => acc + p.amount, 0n);
   };
 
   // ── 5. Initialize Wallets ──────────────────────────────────────────────────
@@ -254,6 +254,22 @@ export default function App() {
   }, [agentSphere, coin, targetBalance, lowWaterMark, pollInterval]);
 
   // ── 7. Listen for incoming Payment Requests on Agent ──────────────────────
+  const policyRef = useRef({
+    coin,
+    maxAutoApprove,
+    dailyPayoutCap,
+    payouts,
+  });
+
+  useEffect(() => {
+    policyRef.current = {
+      coin,
+      maxAutoApprove,
+      dailyPayoutCap,
+      payouts,
+    };
+  }, [coin, maxAutoApprove, dailyPayoutCap, payouts]);
+
   useEffect(() => {
     if (!agentSphere) return;
 
@@ -265,15 +281,20 @@ export default function App() {
       const requestId = request.id;
       const memo = request.message || '(no memo)';
 
+      const currentCoin = policyRef.current.coin;
+      const currentMaxAuto = policyRef.current.maxAutoApprove;
+      const currentDailyCap = policyRef.current.dailyPayoutCap;
+      const currentPayouts = policyRef.current.payouts;
+
       addLog(`[Agent Policy Engine] Incoming request from @${who}: ${toHumanReadable(amount)} ${request.symbol ?? DEFAULT_COIN}`, 'info');
       addLog(`↳ Memo: "${memo}"`, 'info');
 
-      const maxAutoUnits = parseTokenAmount(maxAutoApprove);
-      const dailyCapUnits = parseTokenAmount(dailyPayoutCap);
+      const maxAutoUnits = parseTokenAmount(currentMaxAuto);
+      const dailyCapUnits = parseTokenAmount(currentDailyCap);
 
       // Check Rule 1: Limit ceiling
       if (amount > maxAutoUnits) {
-        addLog(`↳ ⛔ REJECTED: Request of ${toHumanReadable(amount)} ${coin} exceeds single tx ceiling of ${maxAutoApprove} ${coin}.`, 'warn');
+        addLog(`↳ ⛔ REJECTED: Request of ${toHumanReadable(amount)} ${currentCoin} exceeds single tx ceiling of ${currentMaxAuto} ${currentCoin}.`, 'warn');
         await agentSphere.payments.rejectPaymentRequest(requestId);
         
         setPaymentHistory((prev) => [
@@ -284,9 +305,9 @@ export default function App() {
       }
 
       // Check Rule 2: Daily payout cap
-      const currentPayouts = getPayoutsLast24h();
-      if (currentPayouts + amount > dailyCapUnits) {
-        addLog(`↳ ⛔ REJECTED: Request would exceed rolling 24h payout cap of ${dailyPayoutCap} ${coin}.`, 'warn');
+      const currentPayoutsVal = getPayoutsLast24h(currentPayouts);
+      if (currentPayoutsVal + amount > dailyCapUnits) {
+        addLog(`↳ ⛔ REJECTED: Request would exceed rolling 24h payout cap of ${currentDailyCap} ${currentCoin}.`, 'warn');
         await agentSphere.payments.rejectPaymentRequest(requestId);
         
         setPaymentHistory((prev) => [
@@ -298,16 +319,16 @@ export default function App() {
 
       // Check Rule 3: Balance check and top up
       const assets = await agentSphere.payments.getAssets();
-      const coinId = getCoinIdBySymbol(coin);
-      const coinAsset = assets.find((x) => x.symbol === coin || x.coinId === coinId);
+      const coinId = getCoinIdBySymbol(currentCoin);
+      const coinAsset = assets.find((x) => x.symbol === currentCoin || x.coinId === coinId);
       let rawBalance = BigInt(coinAsset?.totalAmount ?? 0);
 
       if (rawBalance < amount) {
-        addLog(`↳ Balance (${toHumanReadable(rawBalance)} ${coin}) insufficient to pay ${toHumanReadable(amount)} ${coin}. Triggering top-up...`, 'warn');
+        addLog(`↳ Balance (${toHumanReadable(rawBalance)} ${currentCoin}) insufficient to pay ${toHumanReadable(amount)} ${currentCoin}. Triggering top-up...`, 'warn');
         await runAgentTopUpCheck();
         
         const freshAssets = await agentSphere.payments.getAssets();
-        const freshAsset = freshAssets.find((x) => x.symbol === coin || x.coinId === coinId);
+        const freshAsset = freshAssets.find((x) => x.symbol === currentCoin || x.coinId === coinId);
         rawBalance = BigInt(freshAsset?.totalAmount ?? 0);
       }
 
@@ -338,12 +359,12 @@ export default function App() {
         setTimeout(async () => {
           if (agentSphere) {
             const agentAssets = await agentSphere.payments.getAssets();
-            const aAsset = agentAssets.find((x) => x.symbol === coin || x.coinId === coinId);
+            const aAsset = agentAssets.find((x) => x.symbol === currentCoin || x.coinId === coinId);
             setAgentBalance(toHumanReadable(BigInt(aAsset?.totalAmount ?? 0)));
           }
           if (testerSphere) {
             const testerAssets = await testerSphere.payments.getAssets();
-            const tAsset = testerAssets.find((x) => x.symbol === coin || x.coinId === coinId);
+            const tAsset = testerAssets.find((x) => x.symbol === currentCoin || x.coinId === coinId);
             setTesterBalance(toHumanReadable(BigInt(tAsset?.totalAmount ?? 0)));
           }
         }, 1500);
@@ -354,7 +375,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [agentSphere, coin, maxAutoApprove, dailyPayoutCap, payouts]);
+  }, [agentSphere]);
 
   // ── 8. Tester Bob sends a request to the Agent ──────────────────────────────
   const sendPaymentRequest = async () => {
@@ -366,9 +387,9 @@ export default function App() {
       const coinId = getCoinIdBySymbol(coin);
       if (!coinId) throw new Error(`Unknown coin symbol: ${coin}`);
 
-      // Recipient is the Agent's nametag or address
+      // Recipient is the Agent's public key (direct routing to avoid Nostr nametag propagation delay)
       const request = await testerSphere.payments.sendPaymentRequest(
-        `@${agentNametag}`,
+        agentSphere.identity!.chainPubkey,
         {
           amount: parseTokenAmount(reqAmount).toString(),
           coinId: coinId,
