@@ -32,14 +32,28 @@ export default function App() {
   const [testerMnemonic, setTesterMnemonic] = useState<string>('');
 
   // ── 3. Interaction Log & History States ────────────────────────────────────
-  const [logs, setLogs] = useState<{ text: string; type: 'info' | 'success' | 'warn' | 'error'; timestamp: string }[]>([]);
+  const [logs, setLogs] = useState<{ text: string; type: 'info' | 'success' | 'warn' | 'error'; timestamp: string }[]>(() => {
+    const saved = localStorage.getItem('agent_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [paymentHistory, setPaymentHistory] = useState<{
     id: string;
     amount: string;
     memo: string;
     status: 'pending' | 'approved' | 'rejected';
     timestamp: string;
-  }[]>([]);
+  }[]>(() => {
+    const saved = localStorage.getItem('payment_history');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('agent_logs', JSON.stringify(logs));
+  }, [logs]);
+
+  useEffect(() => {
+    localStorage.setItem('payment_history', JSON.stringify(paymentHistory));
+  }, [paymentHistory]);
 
   // Payout logs for daily limit calculations
   const [payouts, setPayouts] = useState<{ amount: bigint; timestamp: number }[]>([]);
@@ -411,9 +425,11 @@ export default function App() {
 
   // ── 9. Wipe keys helper for resetting demo ──────────────────────────────────
   const resetDemo = () => {
-    if (confirm('Clear local wallets and start fresh? This will delete saved recovery phrases.')) {
+    if (confirm('Clear local wallets and start fresh? This will delete saved recovery phrases, logs, and transaction history.')) {
       localStorage.removeItem('agent_mnemonic');
       localStorage.removeItem('tester_mnemonic');
+      localStorage.removeItem('agent_logs');
+      localStorage.removeItem('payment_history');
       window.location.reload();
     }
   };
