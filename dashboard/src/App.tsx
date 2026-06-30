@@ -106,7 +106,7 @@ export default function App() {
         network: 'testnet2',
         autoGenerate: true,
         mnemonic: savedMnemonic,
-        nametag: 'treasury_agent_browser',
+        nametag: 'treasury_agent_web',
       });
 
       if (created && generatedMnemonic) {
@@ -119,7 +119,7 @@ export default function App() {
 
       setAgentSphere(sphere);
       setAgentAddress(sphere.identity?.directAddress || '');
-      setAgentNametag(sphere.identity?.nametag || 'treasury_agent_browser');
+      setAgentNametag(sphere.identity?.nametag || 'treasury_agent_web');
       setAgentStatus('active');
       addLog('Agent wallet connected successfully!', 'success');
       addLog(`Agent direct address: ${sphere.identity?.directAddress}`, 'info');
